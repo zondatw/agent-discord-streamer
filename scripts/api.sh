@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Discord REST API wrapper.
-# Token is read from ~/.config/discord-streamer/.token — never from env,
+# Token is read from ~/.config/agent-discord-streamer/.token — never from env,
 # so AI subprocesses never inherit it.
 
 set -euo pipefail
 
 API_BASE="${DISCORD_API_BASE:-https://discord.com/api/v10}"
-TOKEN_FILE="${DISCORD_STREAMER_TOKEN_FILE:-$HOME/.config/discord-streamer/.token}"
+TOKEN_FILE="${DISCORD_STREAMER_TOKEN_FILE:-$HOME/.config/agent-discord-streamer/.token}"
 DISCORD_MAX_LEN=1990
 
 _fail() { echo "error: $*" >&2; exit 1; }
@@ -23,7 +23,7 @@ _req() {
   local args=(-sS -w $'\n%{http_code}'
     -X "$method"
     -H "Authorization: Bot $token"
-    -H "User-Agent: discord-streamer/1.0")
+    -H "User-Agent: agent-discord-streamer/1.0")
   [[ -n "$payload" ]] && args+=(-H "Content-Type: application/json" --data "$payload")
   local raw; raw=$(curl "${args[@]}" "$API_BASE$path")
   local code="${raw##*$'\n'}" body="${raw%$'\n'*}"

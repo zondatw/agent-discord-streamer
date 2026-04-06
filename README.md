@@ -1,4 +1,4 @@
-# discord-streamer
+# agent-discord-streamer
 
 A polling daemon that bridges Discord channels with AI agents (Claude & Codex).
 Users send messages in a Discord channel; the bot replies with AI-generated responses.
@@ -31,7 +31,7 @@ Built with `bash`, `curl`, and `jq` — no extra installs required.
 ### 1. Clone or copy the skill
 
 ```bash
-git clone <this-repo> ~/path/to/discord-streamer
+git clone <this-repo> ~/path/to/agent-discord-streamer
 # or copy the folder anywhere you like
 ```
 
@@ -43,12 +43,12 @@ bash scripts/init.sh
 
 The wizard will:
 
-1. Ask for your Discord bot token and store it at `~/.config/discord-streamer/.token` (mode 600)
+1. Ask for your Discord bot token and store it at `~/.config/agent-discord-streamer/.token` (mode 600)
 2. Validate the token against the Discord API and show your bot's username
 3. Let you add channels and assign `claude` or `codex` to each
 4. Set poll interval and conversation history depth
 5. Optionally install a macOS LaunchAgent so the daemon starts at login
-6. Link `skill.md` into `~/.claude/commands/` so `/discord-streamer` works inside Claude Code
+6. Link `skill.md` into `~/.claude/commands/` so `/agent-discord-streamer` works inside Claude Code
 
 ### 3. Start the daemon
 
@@ -56,7 +56,7 @@ The wizard will:
 bash scripts/daemon.sh
 ```
 
-The daemon runs in the foreground and logs to `~/.config/discord-streamer/daemon.log`.
+The daemon runs in the foreground and logs to `~/.config/agent-discord-streamer/daemon.log`.
 To run it in the background:
 
 ```bash
@@ -108,7 +108,7 @@ bash scripts/api.sh send CHANNEL_ID "hello from the terminal"
 
 ## Configuration
 
-Config lives at `~/.config/discord-streamer/config` and is sourced as bash:
+Config lives at `~/.config/agent-discord-streamer/config` and is sourced as bash:
 
 ```bash
 BOT_ID="123456789012345678"
@@ -134,14 +134,14 @@ Delete the entry from `CHANNELS` and restart the daemon.
 To reprocess messages from now (clearing the "last seen" pointer):
 
 ```bash
-rm ~/.config/discord-streamer/state/CHANNEL_ID.last_id
+rm ~/.config/agent-discord-streamer/state/CHANNEL_ID.last_id
 ```
 
 ## File Layout
 
 ```
-discord-streamer/
-├── skill.md              Claude Code skill (/discord-streamer command)
+agent-discord-streamer/
+├── skill.md              Claude Code skill (/agent-discord-streamer command)
 ├── scripts/
 │   ├── init.sh           Interactive setup wizard
 │   ├── daemon.sh         Polling daemon (main entry point)
@@ -150,10 +150,10 @@ discord-streamer/
 └── .gitignore
 ```
 
-Runtime files (all in `~/.config/discord-streamer/`, not in this repo):
+Runtime files (all in `~/.config/agent-discord-streamer/`, not in this repo):
 
 ```
-~/.config/discord-streamer/
+~/.config/agent-discord-streamer/
 ├── .token          Bot token (chmod 600)
 ├── config          Channel and settings config (chmod 600)
 ├── daemon.log      Daemon output
@@ -163,7 +163,7 @@ Runtime files (all in `~/.config/discord-streamer/`, not in this repo):
 
 ## Security
 
-- The bot token is stored at `~/.config/discord-streamer/.token` with permissions `600`
+- The bot token is stored at `~/.config/agent-discord-streamer/.token` with permissions `600`
 - `daemon.sh` reads the token into a local (non-exported) variable — it is never in the environment
 - `dispatch.sh` explicitly unsets `DISCORD_BOT_TOKEN` before invoking AI, so Claude and Codex processes run without it
 - Config is also `600`; the state directory is `700`
@@ -177,15 +177,15 @@ Runtime files (all in `~/.config/discord-streamer/`, not in this repo):
 pkill -f "daemon.sh"
 
 # LaunchAgent:
-launchctl unload ~/Library/LaunchAgents/com.discord-streamer.plist
+launchctl unload ~/Library/LaunchAgents/com.agent-discord-streamer.plist
 ```
 
 ## Using as a Claude Code Skill
 
-After init, `/discord-streamer` is available inside Claude Code sessions:
+After init, `/agent-discord-streamer` is available inside Claude Code sessions:
 
 ```
-/discord-streamer
+/agent-discord-streamer
 ```
 
 Claude will read `skill.md` and can help you manage channels, check status, debug issues, or restart the daemon.

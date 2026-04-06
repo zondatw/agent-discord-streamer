@@ -4,13 +4,13 @@
 # by the agent, not rebuilt from Discord history.
 #
 # Usage: daemon.sh [--config FILE] [--once]
-#   --config FILE   path to config (default: ~/.config/discord-streamer/config)
+#   --config FILE   path to config (default: ~/.config/agent-discord-streamer/config)
 #   --once          process pending messages once then exit (useful for cron/hooks)
 
 set -euo pipefail
 
 SCRIPT_DIR="${DISCORD_STREAMER_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
-CONFIG_DIR="$HOME/.config/discord-streamer"
+CONFIG_DIR="$HOME/.config/agent-discord-streamer"
 CONFIG_FILE="$CONFIG_DIR/config"
 STATE_DIR="$CONFIG_DIR/state"       # last-seen message ID per channel
 SESSION_DIR="$CONFIG_DIR/sessions"  # agent session ID per channel
@@ -83,7 +83,7 @@ process_message() {
   log "[$channel_id] [$agent] $author: ${content:0:80}"
 
   local prompt_file session_f
-  prompt_file=$(mktemp /tmp/discord-streamer.XXXXXX)
+  prompt_file=$(mktemp /tmp/agent-discord-streamer.XXXXXX)
   session_f=$(session_file "$channel_id")
   # shellcheck disable=SC2064
   trap "rm -f '$prompt_file'" RETURN

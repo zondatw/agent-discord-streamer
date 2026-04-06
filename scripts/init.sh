@@ -2,19 +2,19 @@
 # Discord Streamer — interactive setup wizard.
 #
 # Sets up:
-#   ~/.config/discord-streamer/.token   (chmod 600)
-#   ~/.config/discord-streamer/config
+#   ~/.config/agent-discord-streamer/.token   (chmod 600)
+#   ~/.config/agent-discord-streamer/config
 #   Optional: macOS LaunchAgent for auto-start
 #   Optional: .claude/settings.json in each project directory
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_DIR="$HOME/.config/discord-streamer"
+CONFIG_DIR="$HOME/.config/agent-discord-streamer"
 TOKEN_FILE="$CONFIG_DIR/.token"
 CONFIG_FILE="$CONFIG_DIR/config"
 PLIST_DIR="$HOME/Library/LaunchAgents"
-PLIST_FILE="$PLIST_DIR/com.discord-streamer.plist"
+PLIST_FILE="$PLIST_DIR/com.agent-discord-streamer.plist"
 
 _green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 _yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
@@ -50,7 +50,7 @@ read -rs BOT_TOKEN; echo ""
 _yellow "Validating token..."
 ME_JSON=$(curl -sS \
   -H "Authorization: Bot $BOT_TOKEN" \
-  -H "User-Agent: discord-streamer/1.0" \
+  -H "User-Agent: agent-discord-streamer/1.0" \
   "https://discord.com/api/v10/users/@me") || { _red "curl failed"; exit 1; }
 
 BOT_USERNAME=$(echo "$ME_JSON" | jq -r '.username // empty' 2>/dev/null)
@@ -87,7 +87,7 @@ while true; do
   _yellow "Checking access to channel $CHANNEL_ID..."
   CHAN_JSON=$(curl -sS \
     -H "Authorization: Bot $BOT_TOKEN" \
-    -H "User-Agent: discord-streamer/1.0" \
+    -H "User-Agent: agent-discord-streamer/1.0" \
     "https://discord.com/api/v10/channels/$CHANNEL_ID") || { _yellow "curl failed, adding anyway..."; }
 
   CHAN_NAME=$(echo "$CHAN_JSON" | jq -r '.name // empty' 2>/dev/null || echo "")
@@ -199,7 +199,7 @@ if [[ "$INSTALL_LAUNCH" =~ ^[Yy]$ ]]; then
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.discord-streamer</string>
+  <string>com.agent-discord-streamer</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>

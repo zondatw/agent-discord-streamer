@@ -43,7 +43,7 @@ assert_contains() {
 bold "=== agent-discord-streamer integration test ==="
 echo ""
 
-TOKEN_FILE="${DISCORD_STREAMER_TOKEN_FILE:-$HOME/.config/agent-discord-streamer/.token}"
+TOKEN_FILE="${AGENT_DISCORD_STREAMER_TOKEN_FILE:-$HOME/.config/agent-discord-streamer/.token}"
 CONFIG_FILE="$HOME/.config/agent-discord-streamer/config"
 
 [[ -f "$TOKEN_FILE" ]] || {

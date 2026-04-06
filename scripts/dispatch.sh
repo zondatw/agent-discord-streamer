@@ -22,7 +22,7 @@ PROJECT_PATH="${4:-}"
 [[ -f "$PROMPT_FILE" ]]  || { echo "error: prompt file not found: $PROMPT_FILE" >&2; exit 1; }
 
 # Strip Discord credentials before invoking AI
-unset DISCORD_BOT_TOKEN DISCORD_STREAMER_TOKEN_FILE 2>/dev/null || true
+unset DISCORD_BOT_TOKEN AGENT_DISCORD_STREAMER_TOKEN_FILE 2>/dev/null || true
 
 # Move into the project directory so Claude operates on the right codebase
 if [[ -n "$PROJECT_PATH" ]]; then

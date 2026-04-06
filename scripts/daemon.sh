@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="${DISCORD_STREAMER_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+SCRIPT_DIR="${AGENT_DISCORD_STREAMER_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 CONFIG_DIR="$HOME/.config/agent-discord-streamer"
 CONFIG_FILE="$CONFIG_DIR/config"
 STATE_DIR="$CONFIG_DIR/state"       # last-seen message ID per channel

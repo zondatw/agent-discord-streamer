@@ -6,7 +6,7 @@
 set -euo pipefail
 
 API_BASE="${DISCORD_API_BASE:-https://discord.com/api/v10}"
-TOKEN_FILE="${DISCORD_STREAMER_TOKEN_FILE:-$HOME/.config/agent-discord-streamer/.token}"
+TOKEN_FILE="${AGENT_DISCORD_STREAMER_TOKEN_FILE:-$HOME/.config/agent-discord-streamer/.token}"
 DISCORD_MAX_LEN=1990
 
 _fail() { echo "error: $*" >&2; exit 1; }

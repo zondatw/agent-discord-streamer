@@ -92,7 +92,7 @@ build_prompt() {
 
 # --- process one message ---
 process_message() {
-  local channel_id="$1" msg_id="$2" author="$3" content="$4" agent="$5" project_path="${6:-}"
+  local channel_id="$1" msg_id="$2" author="$3" content="$4" agent="$5" project_path="${6:-}" sandbox="${7:-}"
 
   log "[$channel_id] [$agent] $author: ${content:0:80}"
 
@@ -105,7 +105,7 @@ process_message() {
   build_prompt "$channel_id" "$author" "$content" > "$prompt_file"
 
   local response
-  if response=$("$SCRIPT_DIR/dispatch.sh" "$agent" "$session_f" "$prompt_file" "$project_path" 2>>"$LOG_FILE"); then
+  if response=$("$SCRIPT_DIR/dispatch.sh" "$agent" "$session_f" "$prompt_file" "$project_path" "$sandbox" 2>>"$LOG_FILE"); then
     [[ -n "$response" ]] || response="(no response)"
     "$SCRIPT_DIR/api.sh" send_chunked "$channel_id" "$response" "$msg_id" >>"$LOG_FILE" 2>&1
     log "[$channel_id] reply sent (${#response} chars)"
@@ -118,7 +118,7 @@ process_message() {
 
 # --- poll one channel ---
 poll_channel() {
-  local channel_id="$1" agent="$2" project_path="${3:-}"
+  local channel_id="$1" agent="$2" project_path="${3:-}" sandbox="${4:-}"
   local last_id; last_id=$(get_last_id "$channel_id")
 
   # First run: record current position — don't replay history
@@ -152,7 +152,7 @@ poll_channel() {
     author=$(echo "$msg" | jq -r '.author.username')
     content=$(echo "$msg" | jq -r '.content')
     new_last_id="$msg_id"
-    process_message "$channel_id" "$msg_id" "$author" "$content" "$agent" "$project_path"
+    process_message "$channel_id" "$msg_id" "$author" "$content" "$agent" "$project_path" "$sandbox"
   done <<< "$new_msgs"
 
   [[ "$new_last_id" != "$last_id" ]] && set_last_id "$channel_id" "$new_last_id"
@@ -160,21 +160,22 @@ poll_channel() {
 
 # --- main loop ---
 parse_channel() {
-  # Sets CH_ID, CH_AGENT, CH_PATH from a CHANNEL_ID:AGENT[:PROJECT_PATH] entry
-  IFS=: read -r CH_ID CH_AGENT CH_PATH <<< "$1"
+  # Sets CH_ID, CH_AGENT, CH_PATH, CH_SANDBOX from CHANNEL_ID:AGENT[:PROJECT_PATH[:CODEX_SANDBOX]]
+  IFS=: read -r CH_ID CH_AGENT CH_PATH CH_SANDBOX <<< "$1"
   CH_PATH="${CH_PATH:-}"
+  CH_SANDBOX="${CH_SANDBOX:-}"
 }
 
 log "Agent Discord Streamer daemon starting (poll=${POLL_INTERVAL}s, channels=${#CHANNELS[@]})"
 for ch_entry in "${CHANNELS[@]}"; do
   parse_channel "$ch_entry"
-  log "  watching #$CH_ID → $CH_AGENT${CH_PATH:+ @ $CH_PATH}"
+  log "  watching #$CH_ID → $CH_AGENT${CH_PATH:+ @ $CH_PATH}${CH_SANDBOX:+ [$CH_SANDBOX]}"
 done
 
 if [[ "$ONCE" == true ]]; then
   for ch_entry in "${CHANNELS[@]}"; do
     parse_channel "$ch_entry"
-    poll_channel "$CH_ID" "$CH_AGENT" "$CH_PATH"
+    poll_channel "$CH_ID" "$CH_AGENT" "$CH_PATH" "$CH_SANDBOX"
   done
   exit 0
 fi
@@ -185,7 +186,7 @@ while true; do
   rotate_log
   for ch_entry in "${CHANNELS[@]}"; do
     parse_channel "$ch_entry"
-    poll_channel "$CH_ID" "$CH_AGENT" "$CH_PATH" || log "poll error for $ch_entry"
+    poll_channel "$CH_ID" "$CH_AGENT" "$CH_PATH" "$CH_SANDBOX" || log "poll error: $ch_entry"
   done
   sleep "$POLL_INTERVAL"
 done

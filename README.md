@@ -2,16 +2,18 @@
 
 A polling daemon that bridges Discord channels with AI agents (Claude & Codex).
 Users send messages in a Discord channel; the bot replies with AI-generated responses.
-Each channel maintains its own conversation context, and different channels can use different agents.
+Each channel maintains its own persistent agent session — conversation memory is held by the agent, not rebuilt from Discord history.
 
-Built with `bash`, `curl`, and `jq` — no extra installs required.
+Built with `bash`, `curl`, and `jq` — no extra installs required beyond the AI CLIs.
 
 ## Features
 
 - Chat with **Claude** or **Codex** directly from any Discord channel
-- Each channel gets its own isolated AI context (built from the channel's message history)
+- Each channel gets its own isolated agent session with persistent conversation memory
+- Different channels can use different agents or point at different project directories
 - Discord bot token is stored securely and **never exposed to AI agent processes**
 - Replies are chunked automatically to fit Discord's 2000-character limit
+- Log rotation built in (configurable size and backup count)
 - Optional macOS LaunchAgent for automatic startup at login
 - Single-shot mode for use with cron or Claude Code hooks
 
@@ -19,8 +21,8 @@ Built with `bash`, `curl`, and `jq` — no extra installs required.
 
 - macOS or Linux
 - `bash`, `curl`, `jq`
-- [`claude` CLI](https://github.com/anthropics/claude-code) for Claude agent
-- [`codex` CLI](https://github.com/openai/codex) for Codex agent
+- [`claude` CLI](https://github.com/anthropics/claude-code) — for Claude agent
+- [`codex` CLI](https://github.com/openai/codex) — for Codex agent
 - A Discord bot token with the following permissions:
   - View Channel
   - Read Message History
@@ -32,7 +34,6 @@ Built with `bash`, `curl`, and `jq` — no extra installs required.
 
 ```bash
 git clone <this-repo> ~/path/to/agent-discord-streamer
-# or copy the folder anywhere you like
 ```
 
 ### 2. Run the setup wizard
@@ -46,9 +47,10 @@ The wizard will:
 1. Ask for your Discord bot token and store it at `~/.config/agent-discord-streamer/.token` (mode 600)
 2. Validate the token against the Discord API and show your bot's username
 3. Let you add channels and assign `claude` or `codex` to each
-4. Set poll interval and conversation history depth
-5. Optionally install a macOS LaunchAgent so the daemon starts at login
-6. Link `skill.md` into `~/.claude/commands/` so `/agent-discord-streamer` works inside Claude Code
+4. Optionally set a project directory per channel (Claude will `cd` there and can read/write files)
+5. Generate a `.claude/settings.json` in each project directory with scoped tool permissions
+6. Set the poll interval and write the config
+7. Optionally install a macOS LaunchAgent so the daemon starts at login
 
 ### 3. Start the daemon
 
@@ -70,20 +72,20 @@ If you don't have a bot yet:
 1. Go to [discord.com/developers/applications](https://discord.com/developers/applications) and create a new application
 2. Under **Bot**, click **Add Bot** and copy the token
 3. Under **OAuth2 → URL Generator**, select scopes `bot` and permissions:
-   - Read Messages/View Channels
+   - Read Messages / View Channels
    - Read Message History
    - Send Messages
 4. Open the generated URL in your browser and invite the bot to your server
 
 ## Usage
 
-Once the daemon is running, just send a message in any watched channel:
+Once the daemon is running, send a message in any watched channel:
 
 ```
-@you: How do I reverse a string in Python?
+you: How do I reverse a string in Python?
 ```
 
-The bot replies directly, threading back to your message.
+The bot replies directly, threading back to your message. Conversation memory is maintained across messages — the agent session picks up where it left off.
 
 ### Single-shot mode (cron / hooks)
 
@@ -108,28 +110,24 @@ bash scripts/api.sh send CHANNEL_ID "hello from the terminal"
 
 ## Configuration
 
-Config lives at `~/.config/agent-discord-streamer/config` and is sourced as bash:
+Config lives at `~/.config/agent-discord-streamer/config` (sourced as bash, mode 600):
 
 ```bash
 BOT_ID="123456789012345678"
-POLL_INTERVAL=5       # seconds between polls per channel
-HISTORY_LIMIT=10      # messages included as conversation context
+POLL_INTERVAL=5       # seconds between polls
 
+# Each entry: CHANNEL_ID:agent[:project_path]
 CHANNELS=(
-  "111222333444555666:claude"   # this channel uses Claude
-  "777888999000111222:codex"    # this channel uses Codex
+  "111222333444555666:claude"                        # Claude, no project
+  "777888999000111222:codex"                         # Codex, no project
+  "999111222333444555:claude:/path/to/my-project"   # Claude with project dir
 )
 ```
 
-### Add a channel
+To add a channel, append an entry to `CHANNELS` and restart the daemon.
+To remove one, delete the entry and restart.
 
-Append an entry to `CHANNELS` in the config file, then restart the daemon.
-
-### Remove a channel
-
-Delete the entry from `CHANNELS` and restart the daemon.
-
-### Reset a channel's position
+### Reset a channel's conversation position
 
 To reprocess messages from now (clearing the "last seen" pointer):
 
@@ -137,16 +135,74 @@ To reprocess messages from now (clearing the "last seen" pointer):
 rm ~/.config/agent-discord-streamer/state/CHANNEL_ID.last_id
 ```
 
+To start a fresh agent session for a channel:
+
+```bash
+rm ~/.config/agent-discord-streamer/sessions/CHANNEL_ID.session
+```
+
+### Per-project Claude permissions
+
+When you assign a project path to a Claude channel, `init.sh` writes
+`.claude/settings.json` into that directory with explicit tool permissions:
+
+```json
+{
+  "permissions": {
+    "allow": ["Read(*)", "Edit(*)", "Write(*)", "Bash(git *)"],
+    "deny": []
+  }
+}
+```
+
+Edit this file anytime to adjust what Claude can do in that project.
+
+### Log rotation
+
+The daemon rotates `daemon.log` when it exceeds a size threshold.
+Override via config:
+
+```bash
+LOG_MAX_BYTES=5242880   # 5 MB (default)
+LOG_BACKUPS=3           # number of rotated files to keep (default)
+```
+
+## How It Works
+
+```
+Discord channel
+      │  (user message)
+      ▼
+  daemon.sh  ──poll every N seconds──▶  api.sh (fetch new messages)
+      │
+      │  (for each new message)
+      ▼
+  dispatch.sh
+      ├── claude: claude --print --output-format json [--resume SESSION_ID]
+      │           saves session_id → sessions/CHANNEL_ID.session
+      │
+      └── codex:  codex exec [resume SESSION_ID] --full-auto --json \
+                      --output-last-message /tmp/...
+                  saves session_id → sessions/CHANNEL_ID.session
+      │
+      ▼
+  api.sh send_chunked  (reply, split at 2000 chars if needed)
+```
+
+Each channel's session ID is persisted between polls so the agent remembers the conversation.
+
 ## File Layout
 
 ```
 agent-discord-streamer/
-├── skill.md              Claude Code skill (/agent-discord-streamer command)
 ├── scripts/
 │   ├── init.sh           Interactive setup wizard
 │   ├── daemon.sh         Polling daemon (main entry point)
 │   ├── api.sh            Discord REST API wrapper
-│   └── dispatch.sh       Dispatches prompts to claude or codex
+│   └── dispatch.sh       Routes prompts to claude or codex
+├── test/
+│   ├── test.sh           Integration test (real Discord API, no mocks)
+│   └── README.md         Test documentation
 └── .gitignore
 ```
 
@@ -154,19 +210,29 @@ Runtime files (all in `~/.config/agent-discord-streamer/`, not in this repo):
 
 ```
 ~/.config/agent-discord-streamer/
-├── .token          Bot token (chmod 600)
-├── config          Channel and settings config (chmod 600)
-├── daemon.log      Daemon output
-└── state/
-    └── <channel_id>.last_id    Last processed message ID per channel
+├── .token                   Bot token (chmod 600)
+├── config                   Channel and settings config (chmod 600)
+├── daemon.log               Daemon output (rotated automatically)
+├── state/
+│   └── <channel_id>.last_id     Last processed message ID per channel
+└── sessions/
+    └── <channel_id>.session     Agent session ID per channel
 ```
 
 ## Security
 
-- The bot token is stored at `~/.config/agent-discord-streamer/.token` with permissions `600`
-- `daemon.sh` reads the token into a local (non-exported) variable — it is never in the environment
-- `dispatch.sh` explicitly unsets `DISCORD_BOT_TOKEN` before invoking AI, so Claude and Codex processes run without it
-- Config is also `600`; the state directory is `700`
+- The bot token lives at `~/.config/agent-discord-streamer/.token` with mode `600`
+- `daemon.sh` reads the token into a local variable and immediately `unset`s it before any AI subprocess runs
+- `dispatch.sh` also explicitly unsets `DISCORD_BOT_TOKEN` and `AGENT_DISCORD_STREAMER_TOKEN_FILE`, so Claude and Codex processes start with a clean environment
+- Config is `600`; the config directory is `700`
+
+## Testing
+
+```bash
+DISCORD_TEST_CHANNEL_ID=123456789 bash test/test.sh
+```
+
+See [test/README.md](test/README.md) for details.
 
 ## Stop the Daemon
 
@@ -179,13 +245,3 @@ pkill -f "daemon.sh"
 # LaunchAgent:
 launchctl unload ~/Library/LaunchAgents/com.agent-discord-streamer.plist
 ```
-
-## Using as a Claude Code Skill
-
-After init, `/agent-discord-streamer` is available inside Claude Code sessions:
-
-```
-/agent-discord-streamer
-```
-
-Claude will read `skill.md` and can help you manage channels, check status, debug issues, or restart the daemon.

@@ -104,9 +104,10 @@ echo ""
 bold "5. Claude dispatch"
 if command -v claude >/dev/null 2>&1; then
   PROMPT_FILE=$(mktemp /tmp/agent-discord-streamer-test.XXXXXX)
+  SESSION_FILE=$(mktemp /tmp/agent-discord-streamer-test-session.XXXXXX)
   echo "Reply with exactly the word: PONG" > "$PROMPT_FILE"
-  response=$(bash "$DISPATCH" claude "$PROMPT_FILE" 2>/dev/null || echo "")
-  rm -f "$PROMPT_FILE"
+  response=$(bash "$DISPATCH" claude "$SESSION_FILE" "$PROMPT_FILE" 2>/dev/null || echo "")
+  rm -f "$PROMPT_FILE" "$SESSION_FILE"
   if [[ -n "$response" ]]; then
     pass "claude returned a response"
     echo "    preview: ${response:0:120}"

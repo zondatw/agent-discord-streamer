@@ -170,8 +170,8 @@ JSON
 
       # Add/update [projects."PATH"] trust_level in ~/.codex/config.toml using awk.
       mkdir -p "$HOME/.codex"
-      local codex_config="$HOME/.codex/config.toml"
-      local section="[projects.\"$PROJECT_PATH\"]"
+      codex_config="$HOME/.codex/config.toml"
+      section="[projects.\"$PROJECT_PATH\"]"
       [[ -f "$codex_config" ]] || touch "$codex_config"
 
       if grep -qF "$section" "$codex_config" 2>/dev/null; then

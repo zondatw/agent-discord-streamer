@@ -48,7 +48,7 @@ LOG_BACKUPS="${LOG_BACKUPS:-3}"
 
 rotate_log() {
   [[ -f "$LOG_FILE" ]] || return
-  local size; size=$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)
+  local size; size=$(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)
   (( size < LOG_MAX_BYTES )) && return
   local i
   for (( i=LOG_BACKUPS-1; i>=1; i-- )); do

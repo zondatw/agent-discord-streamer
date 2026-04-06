@@ -43,6 +43,20 @@ mkdir -p "$STATE_DIR" "$SESSION_DIR"
 # Unset token env so AI subprocesses never inherit it
 unset DISCORD_BOT_TOKEN 2>/dev/null || true
 
+LOG_MAX_BYTES="${LOG_MAX_BYTES:-5242880}"  # 5 MB default
+LOG_BACKUPS="${LOG_BACKUPS:-3}"
+
+rotate_log() {
+  [[ -f "$LOG_FILE" ]] || return
+  local size; size=$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)
+  (( size < LOG_MAX_BYTES )) && return
+  local i
+  for (( i=LOG_BACKUPS-1; i>=1; i-- )); do
+    [[ -f "${LOG_FILE}.${i}" ]] && mv "${LOG_FILE}.${i}" "${LOG_FILE}.$((i+1))"
+  done
+  mv "$LOG_FILE" "${LOG_FILE}.1"
+}
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
 # --- state helpers ---
@@ -168,6 +182,7 @@ fi
 trap 'log "Daemon stopped."; exit 0' SIGTERM SIGINT
 
 while true; do
+  rotate_log
   for ch_entry in "${CHANNELS[@]}"; do
     parse_channel "$ch_entry"
     poll_channel "$CH_ID" "$CH_AGENT" "$CH_PATH" || log "poll error for $ch_entry"

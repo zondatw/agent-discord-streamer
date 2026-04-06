@@ -38,10 +38,7 @@ case "$AGENT" in
       echo "error: claude CLI not found in PATH" >&2; exit 1
     }
 
-    # --dangerously-skip-permissions: required for non-interactive daemon use.
-    # The user explicitly configured which project path this channel can access,
-    # so the trust decision was made at init time.
-    ARGS=(--print --output-format json --dangerously-skip-permissions)
+    ARGS=(--print --output-format json)
 
     # Resume existing session if one is stored for this channel
     if [[ -s "$SESSION_FILE" ]]; then
@@ -49,8 +46,8 @@ case "$AGENT" in
       ARGS+=(--resume "$STORED_SESSION")
     fi
 
-    # Run claude and capture full JSON output
-    RAW=$("$CLAUDE_BIN" "${ARGS[@]}" "$PROMPT" 2>/dev/null)
+    # Run claude and capture full JSON output; stderr flows to caller (daemon logs it)
+    RAW=$("$CLAUDE_BIN" "${ARGS[@]}" "$PROMPT")
 
     # Extract human-readable response text
     RESPONSE=$(echo "$RAW" | jq -r '.result // empty' 2>/dev/null)

@@ -5,7 +5,7 @@
 #   ~/.config/discord-streamer/.token   (chmod 600)
 #   ~/.config/discord-streamer/config
 #   Optional: macOS LaunchAgent for auto-start
-#   Optional: link skill.md into ~/.claude/commands/
+#   Optional: .claude/settings.json in each project directory
 
 set -euo pipefail
 
@@ -108,6 +108,47 @@ while true; do
     _yellow "  Warning: path does not exist yet: $PROJECT_PATH"
   fi
 
+  # Write .claude/settings.json into the project so Claude has
+  # explicit per-project permissions instead of a global bypass.
+  if [[ -n "$PROJECT_PATH" && -d "$PROJECT_PATH" ]]; then
+    CLAUDE_SETTINGS_DIR="$PROJECT_PATH/.claude"
+    CLAUDE_SETTINGS_FILE="$CLAUDE_SETTINGS_DIR/settings.json"
+    mkdir -p "$CLAUDE_SETTINGS_DIR"
+
+    echo ""
+    _bold "  Permissions for Claude in $PROJECT_PATH"
+    echo "  Read and Edit/Write are always allowed."
+    echo "  Choose Bash access level:"
+    echo "    1) Full  — Bash(*) — all shell commands"
+    echo "    2) Dev   — git, npm/yarn/pnpm, make, pytest, cargo, go (recommended)"
+    echo "    3) Git   — git commands only"
+    echo "    4) None  — no shell commands"
+    _ask "  Choice [1/2/3/4] (default: 2):"
+    read -r BASH_LEVEL
+    BASH_LEVEL="${BASH_LEVEL:-2}"
+
+    case "$BASH_LEVEL" in
+      1) BASH_RULES='"Bash(*)"' ;;
+      3) BASH_RULES='"Bash(git *)"' ;;
+      4) BASH_RULES='' ;;
+      *) BASH_RULES='"Bash(git *)", "Bash(npm *)", "Bash(yarn *)", "Bash(pnpm *)", "Bash(make *)", "Bash(pytest *)", "Bash(cargo *)", "Bash(go *)"' ;;
+    esac
+
+    ALLOW_RULES='"Read(*)", "Edit(*)", "Write(*)"'
+    [[ -n "$BASH_RULES" ]] && ALLOW_RULES="$ALLOW_RULES, $BASH_RULES"
+
+    cat > "$CLAUDE_SETTINGS_FILE" <<JSON
+{
+  "permissions": {
+    "allow": [$ALLOW_RULES],
+    "deny": []
+  }
+}
+JSON
+    _green "  ✓ Wrote $CLAUDE_SETTINGS_FILE"
+    _yellow "  Edit that file anytime to adjust what Claude can do in this project."
+  fi
+
   ENTRY="${CHANNEL_ID}:${AGENT}"
   [[ -n "$PROJECT_PATH" ]] && ENTRY="${ENTRY}:${PROJECT_PATH}"
   CHANNELS+=("$ENTRY")
@@ -132,7 +173,7 @@ _yellow "Writing config to $CONFIG_FILE..."
   echo "BOT_ID=\"$BOT_ID\""
   echo "POLL_INTERVAL=$POLL_INTERVAL"
   echo ""
-  echo "# CHANNELS: each entry is CHANNEL_ID:agent"
+  echo "# CHANNELS: each entry is CHANNEL_ID:agent[:project_path]"
   echo "CHANNELS=("
   for ch in "${CHANNELS[@]}"; do
     echo "  \"$ch\""

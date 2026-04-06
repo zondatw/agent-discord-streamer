@@ -145,17 +145,17 @@ poll_channel() {
 }
 
 # --- main loop ---
-log "Discord Streamer daemon starting (poll=${POLL_INTERVAL}s, channels=${#CHANNELS[@]})"
-for ch_entry in "${CHANNELS[@]}"; do
-  IFS=: read -r _cid _agent _path <<< "$ch_entry"
-  log "  watching #$_cid → $_agent${_path:+ @ $_path}"
-done
-
 parse_channel() {
   # Sets CH_ID, CH_AGENT, CH_PATH from a CHANNEL_ID:AGENT[:PROJECT_PATH] entry
   IFS=: read -r CH_ID CH_AGENT CH_PATH <<< "$1"
   CH_PATH="${CH_PATH:-}"
 }
+
+log "Discord Streamer daemon starting (poll=${POLL_INTERVAL}s, channels=${#CHANNELS[@]})"
+for ch_entry in "${CHANNELS[@]}"; do
+  parse_channel "$ch_entry"
+  log "  watching #$CH_ID → $CH_AGENT${CH_PATH:+ @ $CH_PATH}"
+done
 
 if [[ "$ONCE" == true ]]; then
   for ch_entry in "${CHANNELS[@]}"; do

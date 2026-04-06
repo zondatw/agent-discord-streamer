@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Discord Streamer — interactive setup wizard.
+# Agent Discord Streamer — interactive setup wizard.
 #
 # Sets up:
 #   ~/.config/agent-discord-streamer/.token   (chmod 600)
@@ -26,7 +26,7 @@ _require() { command -v "$1" >/dev/null 2>&1 || { _red "Required: $1 not found i
 
 echo ""
 _bold "╔══════════════════════════════════════╗"
-_bold "║   Discord Streamer — Setup Wizard    ║"
+_bold "║   Agent Discord Streamer — Setup Wizard    ║"
 _bold "╚══════════════════════════════════════╝"
 echo ""
 
@@ -169,7 +169,7 @@ echo ""
 _yellow "Writing config to $CONFIG_FILE..."
 
 {
-  echo "# Discord Streamer config — generated $(date)"
+  echo "# Agent Discord Streamer config — generated $(date)"
   echo "BOT_ID=\"$BOT_ID\""
   echo "POLL_INTERVAL=$POLL_INTERVAL"
   echo ""

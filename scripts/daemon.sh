@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Discord Streamer daemon — polls Discord channels and routes messages to AI agents.
+# Agent Discord Streamer daemon — polls Discord channels and routes messages to AI agents.
 # Each channel maintains an independent agent session; conversation memory is held
 # by the agent, not rebuilt from Discord history.
 #
@@ -151,7 +151,7 @@ parse_channel() {
   CH_PATH="${CH_PATH:-}"
 }
 
-log "Discord Streamer daemon starting (poll=${POLL_INTERVAL}s, channels=${#CHANNELS[@]})"
+log "Agent Discord Streamer daemon starting (poll=${POLL_INTERVAL}s, channels=${#CHANNELS[@]})"
 for ch_entry in "${CHANNELS[@]}"; do
   parse_channel "$ch_entry"
   log "  watching #$CH_ID → $CH_AGENT${CH_PATH:+ @ $CH_PATH}"

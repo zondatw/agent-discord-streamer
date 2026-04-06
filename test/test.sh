@@ -65,11 +65,12 @@ echo ""
 # ── 1. Bot identity ───────────────────────────────────────────────────────────
 
 bold "1. Bot identity"
-result=$(bash "$API" me)
-assert_contains "GET /users/@me succeeds"  "$result" '"username"'
-assert_contains "response has bot id"      "$result" '"id"'
-BOT_NAME=$(echo "$result" | python3 -c "import json,sys; print(json.load(sys.stdin)['username'])" 2>/dev/null || echo "unknown")
-echo "    bot: $BOT_NAME"
+ME_RESULT=$(bash "$API" me)
+assert_contains "GET /users/@me succeeds"  "$ME_RESULT" '"username"'
+assert_contains "response has bot id"      "$ME_RESULT" '"id"'
+BOT_NAME=$(echo "$ME_RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['username'])" 2>/dev/null || echo "unknown")
+BOT_ID=$(echo "$ME_RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+echo "    bot: $BOT_NAME (ID: ${BOT_ID:-unknown})"
 
 # ── 2. Fetch messages ─────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ sleep 1  # give Discord a moment
 result=$(bash "$API" fetch "$CHANNEL_ID" "" 5)
 assert_contains "sent message appears in fetch" "$result" "$TEST_CONTENT"
 
-# ── 5. dispatch.sh — claude responds ─────────────────────────────────────────
+# ── 5. dispatch.sh — Claude responds ─────────────────────────────────────────
 
 echo ""
 bold "5. Claude dispatch"
@@ -106,22 +107,42 @@ if command -v claude >/dev/null 2>&1; then
   PROMPT_FILE=$(mktemp /tmp/agent-discord-streamer-test.XXXXXX)
   SESSION_FILE=$(mktemp /tmp/agent-discord-streamer-test-session.XXXXXX)
   echo "Reply with exactly the word: PONG" > "$PROMPT_FILE"
-  response=$(bash "$DISPATCH" claude "$SESSION_FILE" "$PROMPT_FILE" 2>/dev/null || echo "")
-  rm -f "$PROMPT_FILE" "$SESSION_FILE"
-  if [[ -n "$response" ]]; then
+  if response=$(bash "$DISPATCH" claude "$SESSION_FILE" "$PROMPT_FILE" 2>&1) && [[ -n "$response" ]]; then
     pass "claude returned a response"
     echo "    preview: ${response:0:120}"
   else
     fail "claude returned empty response"
+    [[ -n "${response:-}" ]] && echo "    stderr: ${response:0:300}"
   fi
+  rm -f "$PROMPT_FILE" "$SESSION_FILE"
 else
   yellow "  claude not in PATH — skipped"
 fi
 
-# ── 6. daemon --once processes the channel ────────────────────────────────────
+# ── 6. dispatch.sh — Codex responds ──────────────────────────────────────────
 
 echo ""
-bold "6. Daemon --once (one poll cycle)"
+bold "6. Codex dispatch"
+if command -v codex >/dev/null 2>&1; then
+  PROMPT_FILE=$(mktemp /tmp/agent-discord-streamer-test.XXXXXX)
+  SESSION_FILE=$(mktemp /tmp/agent-discord-streamer-test-session.XXXXXX)
+  echo "Reply with exactly the word: PONG" > "$PROMPT_FILE"
+  if response=$(bash "$DISPATCH" codex "$SESSION_FILE" "$PROMPT_FILE" 2>&1) && [[ -n "$response" ]]; then
+    pass "codex returned a response"
+    echo "    preview: ${response:0:120}"
+  else
+    fail "codex returned empty response"
+    [[ -n "${response:-}" ]] && echo "    stderr: ${response:0:300}"
+  fi
+  rm -f "$PROMPT_FILE" "$SESSION_FILE"
+else
+  yellow "  codex not in PATH — skipped"
+fi
+
+# ── 7. daemon --once processes the channel ────────────────────────────────────
+
+echo ""
+bold "7. Daemon --once (one poll cycle)"
 if [[ -f "$CONFIG_FILE" ]]; then
   # Check if test channel is in config; if not, run with a temp config
   if grep -q "$CHANNEL_ID" "$CONFIG_FILE" 2>/dev/null; then
@@ -130,9 +151,8 @@ if [[ -f "$CONFIG_FILE" ]]; then
   else
     TEMP_CONFIG=$(mktemp /tmp/agent-discord-streamer-test-config.XXXXXX)
     cat > "$TEMP_CONFIG" <<EOF
-BOT_ID="$(echo "$result" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")"
+BOT_ID="${BOT_ID}"
 POLL_INTERVAL=5
-HISTORY_LIMIT=10
 CHANNELS=(
   "${CHANNEL_ID}:claude"
 )

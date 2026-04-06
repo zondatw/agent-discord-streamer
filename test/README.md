@@ -27,8 +27,9 @@ bash test/test.sh 123456789
 | 2 | Fetch messages from the channel |
 | 3 | Send a timestamped test message |
 | 4 | Sent message appears in a subsequent fetch |
-| 5 | `dispatch.sh` — claude receives a prompt and returns a response |
-| 6 | `daemon.sh --once` completes one poll cycle without error |
+| 5 | `dispatch.sh` — Claude receives a prompt and returns a response |
+| 6 | `dispatch.sh` — Codex receives a prompt and returns a response |
+| 7 | `daemon.sh --once` completes one poll cycle without error |
 
-Test 5 is skipped if `claude` is not in PATH.
-Test 6 uses the existing config if the test channel is already in it, otherwise runs with a temporary single-channel config.
+Tests 5 and 6 are skipped if `claude` / `codex` are not in PATH.
+Test 7 uses the existing config if the test channel is already in it, otherwise runs with a temporary single-channel config.

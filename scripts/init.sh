@@ -168,51 +168,25 @@ JSON
         *) CODEX_SANDBOX=workspace-write;   CODEX_TRUST=trusted    ;;
       esac
 
-      # Add/update [projects."PATH"] trust_level in ~/.codex/config.toml
+      # Add/update [projects."PATH"] trust_level in ~/.codex/config.toml using awk.
       mkdir -p "$HOME/.codex"
-      CODEX_CONFIG="$HOME/.codex/config.toml" \
-      CODEX_PROJECT_PATH="$PROJECT_PATH" \
-      CODEX_TRUST_LEVEL="$CODEX_TRUST" \
-      python3 - <<'PYEOF'
-import os
+      local codex_config="$HOME/.codex/config.toml"
+      local section="[projects.\"$PROJECT_PATH\"]"
+      [[ -f "$codex_config" ]] || touch "$codex_config"
 
-config_path = os.environ['CODEX_CONFIG']
-project_path = os.environ['CODEX_PROJECT_PATH']
-trust_level = os.environ['CODEX_TRUST_LEVEL']
-section_header = '[projects."' + project_path + '"]'
-
-content = open(config_path).read() if os.path.exists(config_path) else ''
-
-if section_header in content:
-    lines = content.split('\n')
-    result = []
-    in_section = False
-    trust_added = False
-    for line in lines:
-        if line.strip() == section_header:
-            in_section = True
-            trust_added = False
-            result.append(line)
-        elif line.startswith('[') and in_section:
-            if not trust_added:
-                result.append('trust_level = "' + trust_level + '"')
-                trust_added = True
-            in_section = False
-            result.append(line)
-        elif in_section and line.strip().startswith('trust_level'):
-            result.append('trust_level = "' + trust_level + '"')
-            trust_added = True
-        else:
-            result.append(line)
-    if in_section and not trust_added:
-        result.append('trust_level = "' + trust_level + '"')
-    content = '\n'.join(result)
-else:
-    content = content.rstrip('\n') + '\n\n' + section_header + '\ntrust_level = "' + trust_level + '"\n'
-
-with open(config_path, 'w') as f:
-    f.write(content)
-PYEOF
+      if grep -qF "$section" "$codex_config" 2>/dev/null; then
+        # Section exists — update or insert trust_level within it
+        awk -v sec="$section" -v trust="$CODEX_TRUST" '
+          $0 == sec       { in_sec=1; found=0; print; next }
+          /^\[/           { if (in_sec && !found) print "trust_level = \"" trust "\""; in_sec=0 }
+          in_sec && /^trust_level[[:space:]]*=/ { print "trust_level = \"" trust "\""; found=1; next }
+          { print }
+          END             { if (in_sec && !found) print "trust_level = \"" trust "\"" }
+        ' "$codex_config" > "${codex_config}.tmp" && mv "${codex_config}.tmp" "$codex_config"
+      else
+        # Section does not exist — append
+        printf '\n%s\ntrust_level = "%s"\n' "$section" "$CODEX_TRUST" >> "$codex_config"
+      fi
       _green "  ✓ Set trust_level=$CODEX_TRUST for $PROJECT_PATH in ~/.codex/config.toml"
       _yellow "  Sandbox: $CODEX_SANDBOX — edit ~/.codex/config.toml anytime to adjust."
     fi

@@ -65,8 +65,32 @@ case "$AGENT" in
     CODEX_BIN=$(command -v codex 2>/dev/null) || {
       echo "error: codex CLI not found in PATH" >&2; exit 1
     }
-    # --full-auto required — interactive mode would hang the daemon
-    "$CODEX_BIN" --full-auto "$PROMPT"
+
+    # Use 'codex exec' — non-interactive, no TTY required.
+    # --output-last-message writes clean response text; --json provides session ID.
+    CODEX_OUT=$(mktemp /tmp/agent-discord-streamer-codex.XXXXXX)
+    # shellcheck disable=SC2064
+    trap "rm -f '$CODEX_OUT'" EXIT
+
+    # Redirect stdin from /dev/null: codex reads stdin when it's a pipe,
+    # which would block indefinitely in daemon context.
+    if [[ -s "$SESSION_FILE" ]]; then
+      STORED_SESSION=$(< "$SESSION_FILE")
+      CODEX_JSONL=$("$CODEX_BIN" exec resume "$STORED_SESSION" \
+        --full-auto --json --output-last-message "$CODEX_OUT" "$PROMPT" < /dev/null)
+    else
+      CODEX_JSONL=$("$CODEX_BIN" exec \
+        --full-auto --json --output-last-message "$CODEX_OUT" "$PROMPT" < /dev/null)
+    fi
+
+    # Persist session ID for next message in this channel
+    CODEX_SID=$(printf '%s\n' "$CODEX_JSONL" | \
+      jq -r '.sessionId // .session_id // empty' 2>/dev/null | \
+      grep -E '^[0-9a-f-]{36}$' | tail -1 || true)
+    CODEX_SID="${CODEX_SID:-}"
+    [[ -n "$CODEX_SID" ]] && echo "$CODEX_SID" > "$SESSION_FILE"
+
+    cat "$CODEX_OUT"
     ;;
 
   *)

@@ -11,6 +11,7 @@ Built with `bash`, `curl`, and `jq` — no extra installs required beyond the AI
 - Chat with **Claude** or **Codex** directly from any Discord channel
 - Each channel gets its own isolated agent session with persistent conversation memory
 - Different channels can use different agents or point at different project directories
+- Per-channel sandbox/permission controls for both Claude and Codex
 - Discord bot token is stored securely and **never exposed to AI agent processes**
 - Replies are chunked automatically to fit Discord's 2000-character limit
 - Log rotation built in (configurable size and backup count)
@@ -46,9 +47,10 @@ The wizard will:
 1. Ask for your Discord bot token and store it at `~/.config/agent-discord-streamer/.token` (mode 600)
 2. Validate the token against the Discord API and show your bot's username
 3. Let you add channels and assign `claude` or `codex` to each
-4. Optionally set a project directory per channel (Claude will `cd` there and can read/write files)
-5. Generate a `.claude/settings.json` in each project directory with scoped tool permissions
-6. Set the poll interval and write the config
+4. Optionally set a project directory per channel
+5. For **Claude** channels with a project path: prompt for Bash access level and write `.claude/settings.json` with scoped tool permissions
+6. For **Codex** channels: prompt for sandbox level and write the trust level to `~/.codex/config.toml`
+7. Set the poll interval and write the config
 
 ### 3. Start the daemon
 
@@ -114,16 +116,22 @@ Config lives at `~/.config/agent-discord-streamer/config` (sourced as bash, mode
 BOT_ID="123456789012345678"
 POLL_INTERVAL=5       # seconds between polls
 
-# Each entry: CHANNEL_ID:agent[:project_path]
+# Each entry: CHANNEL_ID:agent[:project_path[:codex_sandbox]]
 CHANNELS=(
-  "111222333444555666:claude"                        # Claude, no project
-  "777888999000111222:codex"                         # Codex, no project
-  "999111222333444555:claude:/path/to/my-project"   # Claude with project dir
+  "111222333444555666:claude"                                          # Claude, no project
+  "777888999000111222:codex:::workspace-write"                        # Codex, no project
+  "999111222333444555:claude:/path/to/my-project"                     # Claude with project dir
+  "333444555666777888:codex:/path/to/my-project:workspace-write"      # Codex with project dir
 )
 ```
 
-To add a channel, append an entry to `CHANNELS` and restart the daemon.
-To remove one, delete the entry and restart.
+To manage channels without manually editing the config, use the update wizard:
+
+```bash
+bash scripts/update.sh
+```
+
+The update wizard lets you add/remove channels, update permissions, change the poll interval, or rotate the bot token — then rewrites the config automatically.
 
 ### Reset a channel's conversation position
 
@@ -142,18 +150,30 @@ rm ~/.config/agent-discord-streamer/sessions/CHANNEL_ID.session
 ### Per-project Claude permissions
 
 When you assign a project path to a Claude channel, `init.sh` writes
-`.claude/settings.json` into that directory with explicit tool permissions:
+`.claude/settings.json` into that directory with explicit tool permissions.
+The wizard offers four Bash access levels:
 
-```json
-{
-  "permissions": {
-    "allow": ["Read(*)", "Edit(*)", "Write(*)", "Bash(git *)"],
-    "deny": []
-  }
-}
-```
+| Level | Allowed Bash commands |
+|---|---|
+| Full | `Bash(*)` — all shell commands |
+| Dev (default) | `git`, `npm`, `yarn`, `pnpm`, `make`, `pytest`, `cargo`, `go` |
+| Git | `git` commands only |
+| None | no shell commands |
 
-Edit this file anytime to adjust what Claude can do in that project.
+Edit `.claude/settings.json` in the project directory anytime to adjust.
+
+### Per-channel Codex sandbox
+
+When you add a Codex channel, `init.sh` asks for a sandbox level and writes
+the corresponding `trust_level` to `~/.codex/config.toml`:
+
+| Level | Codex flag | trust_level |
+|---|---|---|
+| workspace-write (default) | `--full-auto` | `trusted` |
+| read-only | `--sandbox read-only` | `untrusted` |
+| danger-full-access | `--dangerously-bypass-approvals-and-sandbox` | `trusted` |
+
+Edit `~/.codex/config.toml` anytime to adjust, or use `bash scripts/update.sh` to reprompt.
 
 ### Log rotation
 
@@ -179,7 +199,7 @@ Discord channel
       ├── claude: claude --print --output-format json [--resume SESSION_ID]
       │           saves session_id → sessions/CHANNEL_ID.session
       │
-      └── codex:  codex exec [resume SESSION_ID] --full-auto --json \
+      └── codex:  codex exec [resume SESSION_ID] <sandbox-flags> --json \
                       --output-last-message /tmp/...
                   saves session_id → sessions/CHANNEL_ID.session
       │
@@ -195,6 +215,7 @@ Each channel's session ID is persisted between polls so the agent remembers the 
 agent-discord-streamer/
 ├── scripts/
 │   ├── init.sh           Interactive setup wizard
+│   ├── update.sh         Update settings without re-running init
 │   ├── daemon.sh         Polling daemon (main entry point)
 │   ├── api.sh            Discord REST API wrapper
 │   └── dispatch.sh       Routes prompts to claude or codex

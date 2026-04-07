@@ -108,36 +108,38 @@ while true; do
     _yellow "  Warning: path does not exist yet: $PROJECT_PATH"
   fi
 
-  # Write .claude/settings.json into the project so Claude has
-  # explicit per-project permissions instead of a global bypass.
+  CODEX_SANDBOX=""
+
   if [[ -n "$PROJECT_PATH" && -d "$PROJECT_PATH" ]]; then
-    CLAUDE_SETTINGS_DIR="$PROJECT_PATH/.claude"
-    CLAUDE_SETTINGS_FILE="$CLAUDE_SETTINGS_DIR/settings.json"
-    mkdir -p "$CLAUDE_SETTINGS_DIR"
+    if [[ "$AGENT" == "claude" ]]; then
+      # Write .claude/settings.json with scoped tool permissions.
+      CLAUDE_SETTINGS_DIR="$PROJECT_PATH/.claude"
+      CLAUDE_SETTINGS_FILE="$CLAUDE_SETTINGS_DIR/settings.json"
+      mkdir -p "$CLAUDE_SETTINGS_DIR"
 
-    echo ""
-    _bold "  Permissions for Claude in $PROJECT_PATH"
-    echo "  Read and Edit/Write are always allowed."
-    echo "  Choose Bash access level:"
-    echo "    1) Full  — Bash(*) — all shell commands"
-    echo "    2) Dev   — git, npm/yarn/pnpm, make, pytest, cargo, go (recommended)"
-    echo "    3) Git   — git commands only"
-    echo "    4) None  — no shell commands"
-    _ask "  Choice [1/2/3/4] (default: 2):"
-    read -r BASH_LEVEL
-    BASH_LEVEL="${BASH_LEVEL:-2}"
+      echo ""
+      _bold "  Permissions for Claude in $PROJECT_PATH"
+      echo "  Read and Edit/Write are always allowed."
+      echo "  Choose Bash access level:"
+      echo "    1) Full  — Bash(*) — all shell commands"
+      echo "    2) Dev   — git, npm/yarn/pnpm, make, pytest, cargo, go (recommended)"
+      echo "    3) Git   — git commands only"
+      echo "    4) None  — no shell commands"
+      _ask "  Choice [1/2/3/4] (default: 2):"
+      read -r BASH_LEVEL
+      BASH_LEVEL="${BASH_LEVEL:-2}"
 
-    case "$BASH_LEVEL" in
-      1) BASH_RULES='"Bash(*)"' ;;
-      3) BASH_RULES='"Bash(git *)"' ;;
-      4) BASH_RULES='' ;;
-      *) BASH_RULES='"Bash(git *)", "Bash(npm *)", "Bash(yarn *)", "Bash(pnpm *)", "Bash(make *)", "Bash(pytest *)", "Bash(cargo *)", "Bash(go *)"' ;;
-    esac
+      case "$BASH_LEVEL" in
+        1) BASH_RULES='"Bash(*)"' ;;
+        3) BASH_RULES='"Bash(git *)"' ;;
+        4) BASH_RULES='' ;;
+        *) BASH_RULES='"Bash(git *)", "Bash(npm *)", "Bash(yarn *)", "Bash(pnpm *)", "Bash(make *)", "Bash(pytest *)", "Bash(cargo *)", "Bash(go *)"' ;;
+      esac
 
-    ALLOW_RULES='"Read(*)", "Edit(*)", "Write(*)"'
-    [[ -n "$BASH_RULES" ]] && ALLOW_RULES="$ALLOW_RULES, $BASH_RULES"
+      ALLOW_RULES='"Read(*)", "Edit(*)", "Write(*)"'
+      [[ -n "$BASH_RULES" ]] && ALLOW_RULES="$ALLOW_RULES, $BASH_RULES"
 
-    cat > "$CLAUDE_SETTINGS_FILE" <<JSON
+      cat > "$CLAUDE_SETTINGS_FILE" <<JSON
 {
   "permissions": {
     "allow": [$ALLOW_RULES],
@@ -145,14 +147,56 @@ while true; do
   }
 }
 JSON
-    _green "  ✓ Wrote $CLAUDE_SETTINGS_FILE"
-    _yellow "  Edit that file anytime to adjust what Claude can do in this project."
+      _green "  ✓ Wrote $CLAUDE_SETTINGS_FILE"
+      _yellow "  Edit that file anytime to adjust what Claude can do in this project."
+
+    elif [[ "$AGENT" == "codex" ]]; then
+      # Write project trust level to ~/.codex/config.toml and record sandbox mode.
+      echo ""
+      _bold "  Permissions for Codex in $PROJECT_PATH"
+      echo "  Choose sandbox level:"
+      echo "    1) workspace-write   — read & write project files (recommended)"
+      echo "    2) read-only         — read files only, no writes or commands"
+      echo "    3) danger-full-access — no sandbox restrictions (dangerous)"
+      _ask "  Choice [1/2/3] (default: 1):"
+      read -r SANDBOX_LEVEL
+      SANDBOX_LEVEL="${SANDBOX_LEVEL:-1}"
+
+      case "$SANDBOX_LEVEL" in
+        2) CODEX_SANDBOX=read-only;         CODEX_TRUST=untrusted ;;
+        3) CODEX_SANDBOX=danger-full-access; CODEX_TRUST=trusted   ;;
+        *) CODEX_SANDBOX=workspace-write;   CODEX_TRUST=trusted    ;;
+      esac
+
+      # Add/update [projects."PATH"] trust_level in ~/.codex/config.toml using awk.
+      mkdir -p "$HOME/.codex"
+      codex_config="$HOME/.codex/config.toml"
+      section="[projects.\"$PROJECT_PATH\"]"
+      [[ -f "$codex_config" ]] || touch "$codex_config"
+
+      if grep -qF "$section" "$codex_config" 2>/dev/null; then
+        # Section exists — update or insert trust_level within it
+        awk -v sec="$section" -v trust="$CODEX_TRUST" '
+          $0 == sec       { in_sec=1; found=0; print; next }
+          /^\[/           { if (in_sec && !found) print "trust_level = \"" trust "\""; in_sec=0 }
+          in_sec && /^trust_level[[:space:]]*=/ { print "trust_level = \"" trust "\""; found=1; next }
+          { print }
+          END             { if (in_sec && !found) print "trust_level = \"" trust "\"" }
+        ' "$codex_config" > "${codex_config}.tmp" && mv "${codex_config}.tmp" "$codex_config"
+      else
+        # Section does not exist — append
+        printf '\n%s\ntrust_level = "%s"\n' "$section" "$CODEX_TRUST" >> "$codex_config"
+      fi
+      _green "  ✓ Set trust_level=$CODEX_TRUST for $PROJECT_PATH in ~/.codex/config.toml"
+      _yellow "  Sandbox: $CODEX_SANDBOX — edit ~/.codex/config.toml anytime to adjust."
+    fi
   fi
 
   ENTRY="${CHANNEL_ID}:${AGENT}"
   [[ -n "$PROJECT_PATH" ]] && ENTRY="${ENTRY}:${PROJECT_PATH}"
+  [[ -n "$CODEX_SANDBOX" ]] && ENTRY="${ENTRY}:${CODEX_SANDBOX}"
   CHANNELS+=("$ENTRY")
-  _green "  Added: $CHANNEL_ID → $AGENT${PROJECT_PATH:+ @ $PROJECT_PATH}"
+  _green "  Added: $CHANNEL_ID → $AGENT${PROJECT_PATH:+ @ $PROJECT_PATH}${CODEX_SANDBOX:+ [$CODEX_SANDBOX]}"
 done
 
 [[ ${#CHANNELS[@]} -gt 0 ]] || { _red "No channels configured. Exiting."; exit 1; }

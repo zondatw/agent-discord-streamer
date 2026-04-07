@@ -17,6 +17,7 @@ AGENT="${1:-claude}"
 SESSION_FILE="${2:-}"
 PROMPT_FILE="${3:-}"
 PROJECT_PATH="${4:-}"
+CODEX_SANDBOX="${5:-workspace-write}"  # workspace-write | read-only | danger-full-access
 
 [[ -n "$SESSION_FILE" ]] || { echo "error: SESSION_FILE required" >&2; exit 1; }
 [[ -f "$PROMPT_FILE" ]]  || { echo "error: prompt file not found: $PROMPT_FILE" >&2; exit 1; }
@@ -72,15 +73,24 @@ case "$AGENT" in
     # shellcheck disable=SC2064
     trap "rm -f '$CODEX_OUT'" EXIT
 
-    # Redirect stdin from /dev/null: codex reads stdin when it's a pipe,
-    # which would block indefinitely in daemon context.
+    # Map sandbox level to exec flags.
+    # Redirect stdin from /dev/null: codex reads stdin when piped (blocks daemon).
+    case "$CODEX_SANDBOX" in
+      read-only)
+        SANDBOX_FLAGS=(--sandbox read-only) ;;
+      danger-full-access)
+        SANDBOX_FLAGS=(--dangerously-bypass-approvals-and-sandbox) ;;
+      *)  # workspace-write (default)
+        SANDBOX_FLAGS=(--full-auto) ;;
+    esac
+
     if [[ -s "$SESSION_FILE" ]]; then
       STORED_SESSION=$(< "$SESSION_FILE")
       CODEX_JSONL=$("$CODEX_BIN" exec resume "$STORED_SESSION" \
-        --full-auto --json --output-last-message "$CODEX_OUT" "$PROMPT" < /dev/null)
+        "${SANDBOX_FLAGS[@]}" --json --output-last-message "$CODEX_OUT" "$PROMPT" < /dev/null)
     else
       CODEX_JSONL=$("$CODEX_BIN" exec \
-        --full-auto --json --output-last-message "$CODEX_OUT" "$PROMPT" < /dev/null)
+        "${SANDBOX_FLAGS[@]}" --json --output-last-message "$CODEX_OUT" "$PROMPT" < /dev/null)
     fi
 
     # Persist session ID for next message in this channel

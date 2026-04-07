@@ -119,21 +119,21 @@ JSON
 
 _write_codex_permissions() {
   local project_path="$1"
-  echo ""
-  _bold "  Permissions for Codex in $project_path"
-  echo "  Choose sandbox level:"
-  echo "    1) workspace-write    — read & write project files (recommended)"
-  echo "    2) read-only          — read files only, no writes or commands"
-  echo "    3) danger-full-access — no sandbox restrictions (dangerous)"
-  _ask "  Choice [1/2/3] (default: 1):"
+  echo "" >&2
+  _bold "  Permissions for Codex in $project_path" >&2
+  echo "  Choose sandbox level:" >&2
+  echo "    1) workspace-write    — read & write project files (recommended)" >&2
+  echo "    2) read-only          — read files only, no writes or commands" >&2
+  echo "    3) danger-full-access — no sandbox restrictions (dangerous)" >&2
+  _ask "  Choice [1/2/3] (default: 1):" >&2
   read -r SANDBOX_LEVEL
   SANDBOX_LEVEL="${SANDBOX_LEVEL:-1}"
 
   local codex_sandbox codex_trust
   case "$SANDBOX_LEVEL" in
-    2) codex_sandbox=read-only;         codex_trust=untrusted ;;
+    2) codex_sandbox=read-only;          codex_trust=untrusted ;;
     3) codex_sandbox=danger-full-access; codex_trust=trusted   ;;
-    *) codex_sandbox=workspace-write;   codex_trust=trusted    ;;
+    *) codex_sandbox=workspace-write;    codex_trust=trusted   ;;
   esac
 
   mkdir -p "$HOME/.codex"
@@ -142,17 +142,18 @@ _write_codex_permissions() {
   [[ -f "$codex_config" ]] || touch "$codex_config"
 
   if grep -qF "$section" "$codex_config" 2>/dev/null; then
-    awk -v sec="$section" -v trust="$codex_trust" '
-      $0 == sec       { in_sec=1; found=0; print; next }
-      /^\[/           { if (in_sec && !found) print "trust_level = \"" trust "\""; in_sec=0 }
-      in_sec && /^trust_level[[:space:]]*=/ { print "trust_level = \"" trust "\""; found=1; next }
-      { print }
-      END             { if (in_sec && !found) print "trust_level = \"" trust "\"" }
-    ' "$codex_config" > "${codex_config}.tmp" && mv "${codex_config}.tmp" "$codex_config"
+    awk -v sec="$section" -v trust="$codex_trust" \
+      '$0==sec{in_sec=1;found=0;print;next}
+       /^\[/{if(in_sec&&!found)print "trust_level = \""trust"\"";in_sec=0}
+       in_sec&&/^trust_level[[:space:]]*=/{print "trust_level = \""trust"\"";found=1;next}
+       {print}
+       END{if(in_sec&&!found)print "trust_level = \""trust"\""}' \
+      "$codex_config" > "${codex_config}.tmp" && mv "${codex_config}.tmp" "$codex_config"
   else
     printf '\n%s\ntrust_level = "%s"\n' "$section" "$codex_trust" >> "$codex_config"
   fi
-  _green "  ✓ Set trust_level=$codex_trust for $project_path in ~/.codex/config.toml"
+  _green "  ✓ Set trust_level=$codex_trust for $project_path in ~/.codex/config.toml" >&2
+  _yellow "  Sandbox: $codex_sandbox — edit ~/.codex/config.toml anytime to adjust." >&2
   echo "$codex_sandbox"
 }
 

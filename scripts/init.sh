@@ -13,8 +13,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$HOME/.config/agent-discord-streamer"
 TOKEN_FILE="$CONFIG_DIR/.token"
 CONFIG_FILE="$CONFIG_DIR/config"
-PLIST_DIR="$HOME/Library/LaunchAgents"
-PLIST_FILE="$PLIST_DIR/com.agent-discord-streamer.plist"
 
 _green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 _yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
@@ -224,53 +222,6 @@ _yellow "Writing config to $CONFIG_FILE..."
 } > "$CONFIG_FILE"
 chmod 600 "$CONFIG_FILE"
 _green "✓ Config written."
-
-# ── 5. macOS LaunchAgent (optional) ──────────────────────────────────────────
-echo ""
-_bold "Step 4 — Auto-start (macOS LaunchAgent)"
-_ask "Install LaunchAgent to start daemon automatically at login? [y/N]:"
-read -r INSTALL_LAUNCH
-if [[ "$INSTALL_LAUNCH" =~ ^[Yy]$ ]]; then
-  mkdir -p "$PLIST_DIR"
-  DAEMON_SH="$SCRIPT_DIR/daemon.sh"
-  LOG="$CONFIG_DIR/daemon.log"
-  cat > "$PLIST_FILE" <<XML
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>com.agent-discord-streamer</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/bash</string>
-    <string>$DAEMON_SH</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>$LOG</string>
-  <key>StandardErrorPath</key>
-  <string>$LOG</string>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>HOME</key>
-    <string>$HOME</string>
-    <key>PATH</key>
-    <string>$PATH</string>
-  </dict>
-</dict>
-</plist>
-XML
-  launchctl load "$PLIST_FILE" 2>/dev/null && _green "✓ LaunchAgent loaded." || _yellow "  launchctl load failed — you can load it manually:"
-  echo "    launchctl load $PLIST_FILE"
-else
-  _yellow "  Skipped. Start manually with:"
-  echo "    bash $SCRIPT_DIR/daemon.sh"
-fi
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""

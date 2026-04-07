@@ -14,7 +14,6 @@ Built with `bash`, `curl`, and `jq` — no extra installs required beyond the AI
 - Discord bot token is stored securely and **never exposed to AI agent processes**
 - Replies are chunked automatically to fit Discord's 2000-character limit
 - Log rotation built in (configurable size and backup count)
-- Optional macOS LaunchAgent for automatic startup at login
 - Single-shot mode for use with cron or Claude Code hooks
 
 ## Requirements
@@ -50,7 +49,6 @@ The wizard will:
 4. Optionally set a project directory per channel (Claude will `cd` there and can read/write files)
 5. Generate a `.claude/settings.json` in each project directory with scoped tool permissions
 6. Set the poll interval and write the config
-7. Optionally install a macOS LaunchAgent so the daemon starts at login
 
 ### 3. Start the daemon
 
@@ -241,7 +239,4 @@ See [test/README.md](test/README.md) for details.
 
 # Background:
 pkill -f "daemon.sh"
-
-# LaunchAgent:
-launchctl unload ~/Library/LaunchAgents/com.agent-discord-streamer.plist
 ```
